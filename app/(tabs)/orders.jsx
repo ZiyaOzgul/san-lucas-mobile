@@ -1,5 +1,5 @@
-import { useState } from 'react';
-import { View, Text, FlatList, TouchableOpacity, StyleSheet, Modal, ActivityIndicator, RefreshControl } from 'react-native';
+import { useState, useRef, useMemo } from 'react';
+import { View, Text, FlatList, TouchableOpacity, StyleSheet, Modal, ActivityIndicator, RefreshControl, Platform } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { scale, verticalScale, moderateScale } from 'react-native-size-matters';
 import { Badge } from '../../components/shared/Badge';
@@ -35,13 +35,19 @@ export default function OrdersScreen() {
   const [selectedOrder, setSelectedOrder] = useState(null);
   const [refreshing, setRefreshing] = useState(false);
 
+  // Keep last opened order around through the Modal close animation to avoid
+  // unmounting children mid-animation (Android "addViewAt failed" crash).
+  const lastOrderRef = useRef(null);
+  if (selectedOrder) lastOrderRef.current = selectedOrder;
+  const orderToShow = selectedOrder || lastOrderRef.current;
+
   async function handleRefresh() {
     setRefreshing(true);
     await refetch();
     setRefreshing(false);
   }
 
-  const badge = selectedOrder ? statusBadge(selectedOrder.status) : null;
+  const badge = orderToShow ? statusBadge(orderToShow.status) : null;
 
   return (
     <View style={styles.container}>
@@ -68,6 +74,7 @@ export default function OrdersScreen() {
           data={orders}
           keyExtractor={item => String(item.id)}
           contentContainerStyle={styles.list}
+          removeClippedSubviews={false}
           renderItem={({ item }) => {
             const { label, variant } = statusBadge(item.status);
             const summary = item.order_items?.slice(0, 2).map(i => i.products?.name).filter(Boolean).join(', ');
@@ -108,52 +115,55 @@ export default function OrdersScreen() {
       <Modal
         visible={!!selectedOrder}
         animationType="slide"
-        presentationStyle="pageSheet"
+        presentationStyle={Platform.OS === 'ios' ? 'pageSheet' : 'fullScreen'}
         onRequestClose={() => setSelectedOrder(null)}
       >
-        {selectedOrder && (
-          <SafeAreaView style={styles.detail} edges={['top', 'bottom']}>
-            <View style={styles.detailHeader}>
-              <Text style={styles.detailTitle}>{selectedOrder.tables?.name} — #{selectedOrder.id}</Text>
-              <TouchableOpacity onPress={() => setSelectedOrder(null)}>
-                <Text style={styles.closeX}>✕</Text>
-              </TouchableOpacity>
-            </View>
+        <SafeAreaView style={styles.detail} edges={['top', 'bottom']}>
+          {orderToShow ? (
+            <>
+              <View style={styles.detailHeader}>
+                <Text style={styles.detailTitle}>{orderToShow.tables?.name} — #{orderToShow.id}</Text>
+                <TouchableOpacity onPress={() => setSelectedOrder(null)}>
+                  <Text style={styles.closeX}>✕</Text>
+                </TouchableOpacity>
+              </View>
 
-            <View style={styles.detailMeta}>
-              {badge && <Badge label={badge.label} variant={badge.variant} />}
-              <Text style={styles.detailDate}>
-                {formatDate(selectedOrder.created_at)} {formatTime(selectedOrder.created_at)}
-              </Text>
-            </View>
-
-            <FlatList
-              data={selectedOrder.order_items || []}
-              keyExtractor={(item, idx) => String(idx)}
-              contentContainerStyle={styles.detailItems}
-              renderItem={({ item }) => (
-                <View style={styles.detailItem}>
-                  <Text style={styles.detailQty}>{item.quantity}x</Text>
-                  <Text style={styles.detailName}>{item.products?.name}</Text>
-                  <Text style={styles.detailPrice}>₺{(item.unit_price * item.quantity).toFixed(2)}</Text>
-                </View>
-              )}
-            />
-
-            <View style={styles.detailFooter}>
-              <View style={styles.detailRow}>
-                <Text style={styles.detailLabel}>Ödeme</Text>
-                <Text style={styles.detailValue}>
-                  {selectedOrder.payment_method === 'cash' ? 'Nakit' : selectedOrder.payment_method === 'card' ? 'Kart' : '—'}
+              <View style={styles.detailMeta}>
+                {badge && <Badge label={badge.label} variant={badge.variant} />}
+                <Text style={styles.detailDate}>
+                  {formatDate(orderToShow.created_at)} {formatTime(orderToShow.created_at)}
                 </Text>
               </View>
-              <View style={styles.detailRow}>
-                <Text style={styles.detailLabel}>Toplam</Text>
-                <Text style={[styles.detailValue, styles.detailTotal]}>₺{Number(selectedOrder.total).toFixed(2)}</Text>
+
+              <FlatList
+                data={orderToShow.order_items || []}
+                keyExtractor={(item, idx) => String(item.id ?? idx)}
+                contentContainerStyle={styles.detailItems}
+                removeClippedSubviews={false}
+                renderItem={({ item }) => (
+                  <View style={styles.detailItem}>
+                    <Text style={styles.detailQty}>{item.quantity}x</Text>
+                    <Text style={styles.detailName}>{item.products?.name}</Text>
+                    <Text style={styles.detailPrice}>₺{(item.unit_price * item.quantity).toFixed(2)}</Text>
+                  </View>
+                )}
+              />
+
+              <View style={styles.detailFooter}>
+                <View style={styles.detailRow}>
+                  <Text style={styles.detailLabel}>Ödeme</Text>
+                  <Text style={styles.detailValue}>
+                    {orderToShow.payment_method === 'cash' ? 'Nakit' : orderToShow.payment_method === 'card' ? 'Kart' : '—'}
+                  </Text>
+                </View>
+                <View style={styles.detailRow}>
+                  <Text style={styles.detailLabel}>Toplam</Text>
+                  <Text style={[styles.detailValue, styles.detailTotal]}>₺{Number(orderToShow.total).toFixed(2)}</Text>
+                </View>
               </View>
-            </View>
-          </SafeAreaView>
-        )}
+            </>
+          ) : null}
+        </SafeAreaView>
       </Modal>
     </View>
   );

@@ -1,4 +1,6 @@
+import { useEffect, useState } from 'react';
 import { TouchableOpacity, View, Text, StyleSheet } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import { scale, verticalScale, moderateScale } from 'react-native-size-matters';
 import { Badge } from './shared/Badge';
 import { colors } from '../styles/colors';
@@ -6,6 +8,7 @@ import { colors } from '../styles/colors';
 function getTimeOpen(createdAt) {
   if (!createdAt) return '';
   const diff = Math.floor((Date.now() - new Date(createdAt)) / 60000);
+  if (diff < 1) return 'az önce';
   if (diff < 60) return `${diff} dk`;
   return `${Math.floor(diff / 60)} sa ${diff % 60} dk`;
 }
@@ -14,6 +17,14 @@ export function TableCard({ table, order, onPress, isSelected }) {
   const isOccupied = table.status === 'occupied';
   const itemCount = order?.order_items?.length || 0;
   const total = order?.total || 0;
+
+  // Tick every 30s so the elapsed time updates live without a refetch.
+  const [, setTick] = useState(0);
+  useEffect(() => {
+    if (!isOccupied || !order?.created_at) return;
+    const id = setInterval(() => setTick(t => t + 1), 30000);
+    return () => clearInterval(id);
+  }, [isOccupied, order?.created_at]);
 
   return (
     <TouchableOpacity
@@ -36,7 +47,10 @@ export function TableCard({ table, order, onPress, isSelected }) {
         <View style={styles.info}>
           <Text style={styles.itemCount}>{itemCount} ürün</Text>
           <Text style={styles.total}>₺{Number(total).toFixed(2)}</Text>
-          <Text style={styles.time}>{getTimeOpen(order.created_at)}</Text>
+          <View style={styles.timeRow}>
+            <Ionicons name="time-outline" size={moderateScale(11)} color={colors.textMuted} />
+            <Text style={styles.time}>{getTimeOpen(order.created_at)}</Text>
+          </View>
         </View>
       ) : (
         <Text style={styles.empty}>Boş masa</Text>
@@ -89,6 +103,12 @@ const styles = StyleSheet.create({
     fontSize: moderateScale(16),
     fontWeight: '700',
     color: colors.textPrimary,
+  },
+  timeRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: scale(3),
+    marginTop: verticalScale(2),
   },
   time: {
     fontSize: moderateScale(11),

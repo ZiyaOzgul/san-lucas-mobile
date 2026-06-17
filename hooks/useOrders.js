@@ -1,6 +1,15 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { supabase } from '../lib/supabase';
 import { useAuth } from './useAuth';
+
+// Hermes (React Native JS engine) lacks crypto.randomUUID — small RFC4122 v4 fallback.
+function uuidv4() {
+  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, c => {
+    const r = (Math.random() * 16) | 0;
+    const v = c === 'x' ? r : (r & 0x3) | 0x8;
+    return v.toString(16);
+  });
+}
 
 export function useOrders(filter = 'all') {
   const [orders, setOrders] = useState([]);
@@ -29,16 +38,29 @@ export function useOrders(filter = 'all') {
     }
   }
 
+  const refetchTimerRef = useRef(null);
+  function scheduleRefetch() {
+    if (refetchTimerRef.current) clearTimeout(refetchTimerRef.current);
+    refetchTimerRef.current = setTimeout(() => {
+      refetchTimerRef.current = null;
+      fetchOrders();
+    }, 300);
+  }
+
   useEffect(() => {
     fetchOrders();
 
+    const channelName = `orders-${filter}-${Math.random().toString(36).slice(2, 8)}`;
     const channel = supabase
-      .channel(`orders-${filter}`)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'orders' }, fetchOrders)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'order_items' }, fetchOrders)
+      .channel(channelName)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'orders' }, scheduleRefetch)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'order_items' }, scheduleRefetch)
       .subscribe();
 
-    return () => supabase.removeChannel(channel);
+    return () => {
+      if (refetchTimerRef.current) clearTimeout(refetchTimerRef.current);
+      supabase.removeChannel(channel);
+    };
   }, [filter]);
 
   async function createOrder(tableId, items, paymentMethod) {
@@ -49,7 +71,7 @@ export function useOrders(filter = 'all') {
         status: 'active',
         payment_method: paymentMethod,
         total: items.reduce((sum, i) => sum + i.unit_price * i.quantity, 0),
-        local_id: crypto.randomUUID(),
+        local_id: uuidv4(),
         is_synced: true,
         closed_by: user?.id ?? null,
         waiter_name: profile?.full_name ?? null,
@@ -63,7 +85,7 @@ export function useOrders(filter = 'all') {
       product_id: item.product_id,
       quantity: item.quantity,
       unit_price: item.unit_price,
-      local_id: crypto.randomUUID(),
+      local_id: uuidv4(),
       is_synced: true,
     }));
 

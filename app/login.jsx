@@ -1,8 +1,9 @@
 import { useState } from 'react';
-import { View, Text, TextInput, StyleSheet, Alert, KeyboardAvoidingView, Platform, ScrollView } from 'react-native';
+import { View, Text, TextInput, StyleSheet, Alert, KeyboardAvoidingView, Platform, ScrollView, Pressable } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { scale, verticalScale, moderateScale } from 'react-native-size-matters';
+import { Ionicons } from '@expo/vector-icons';
 import { Button } from '../components/shared/Button';
 import { signIn } from '../lib/auth';
 import { colors } from '../styles/colors';
@@ -10,6 +11,7 @@ import { colors } from '../styles/colors';
 export default function Login() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const router = useRouter();
@@ -36,6 +38,7 @@ export default function Login() {
       <KeyboardAvoidingView
         style={styles.container}
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : verticalScale(20)}
       >
       <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
         <View style={styles.logoArea}>
@@ -58,14 +61,31 @@ export default function Login() {
           />
 
           <Text style={styles.label}>Şifre</Text>
-          <TextInput
-            style={styles.input}
-            value={password}
-            onChangeText={setPassword}
-            placeholder="••••••••"
-            placeholderTextColor={colors.textMuted}
-            secureTextEntry
-          />
+          <View style={styles.passwordWrapper}>
+            <TextInput
+              style={styles.passwordInput}
+              value={password}
+              onChangeText={setPassword}
+              placeholder="••••••••"
+              placeholderTextColor={colors.textMuted}
+              secureTextEntry={!showPassword}
+              autoCapitalize='none'
+              autoCorrect={false}
+            />
+            <Pressable
+              onPress={() => setShowPassword((v) => !v)}
+              hitSlop={scale(8)}
+              style={styles.passwordToggle}
+              accessibilityRole="button"
+              accessibilityLabel={showPassword ? 'Şifreyi gizle' : 'Şifreyi göster'}
+            >
+              <Ionicons
+                name={showPassword ? 'eye-off-outline' : 'eye-outline'}
+                size={moderateScale(20)}
+                color={colors.textSecondary}
+              />
+            </Pressable>
+          </View>
 
           {error ? <Text style={styles.error}>{error}</Text> : null}
 
@@ -141,6 +161,26 @@ const styles = StyleSheet.create({
     color: colors.textPrimary,
     backgroundColor: colors.bgPage,
     marginBottom: verticalScale(16),
+  },
+  passwordWrapper: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: moderateScale(8),
+    backgroundColor: colors.bgPage,
+    marginBottom: verticalScale(16),
+  },
+  passwordInput: {
+    flex: 1,
+    paddingHorizontal: scale(12),
+    paddingVertical: verticalScale(12),
+    fontSize: moderateScale(15),
+    color: colors.textPrimary,
+  },
+  passwordToggle: {
+    paddingHorizontal: scale(12),
+    paddingVertical: verticalScale(12),
   },
   error: {
     fontSize: moderateScale(13),

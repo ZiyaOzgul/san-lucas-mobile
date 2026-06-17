@@ -77,6 +77,14 @@ export default function TabLayout() {
         }}
       />
       <Tabs.Screen
+        name="ingredients"
+        options={{
+          title: 'Malzemeler',
+          tabBarIcon: ({ color }) => <TabBarIcon name="flask-outline" color={color} />,
+          href: isAdmin ? '/ingredients' : null,
+        }}
+      />
+      <Tabs.Screen
         name="reports"
         options={{
           title: 'Raporlar',

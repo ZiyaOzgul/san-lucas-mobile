@@ -1,20 +1,22 @@
 import { useState, useEffect, useCallback } from 'react';
-import { View, Text, FlatList, StyleSheet, Modal, ActivityIndicator, RefreshControl } from 'react-native';
+import { View, Text, FlatList, StyleSheet, Modal, ActivityIndicator, RefreshControl, Platform } from 'react-native';
 import { scale, verticalScale, moderateScale } from 'react-native-size-matters';
 import { useFocusEffect } from 'expo-router';
 import { TableCard } from '../../components/TableCard';
 import { OrderPanel } from '../../components/OrderPanel';
+import { NewOrderModal } from '../../components/NewOrderModal';
 import { useTables } from '../../hooks/useTables';
 import { useOrders } from '../../hooks/useOrders';
 import { useAuth } from '../../hooks/useAuth';
 import { colors } from '../../styles/colors';
 
 export default function TablesScreen() {
-  const { tables, loading, refetch, getActiveOrderForTable } = useTables();
-  const { closeOrder } = useOrders();
+  const { tables, loading, error, refetch, getActiveOrderForTable, updateTableStatus } = useTables();
+  const { closeOrder, createOrder } = useOrders();
   const { user } = useAuth();
   const [selectedTable, setSelectedTable] = useState(null);
   const [panelVisible, setPanelVisible] = useState(false);
+  const [newOrderTable, setNewOrderTable] = useState(null);
   const [tableOrders, setTableOrders] = useState({});
   const [refreshing, setRefreshing] = useState(false);
 
@@ -49,7 +51,15 @@ export default function TablesScreen() {
     if (table.status === 'occupied') {
       setSelectedTable(table);
       setPanelVisible(true);
+    } else {
+      setNewOrderTable(table);
     }
+  }
+
+  function handleNewOrderClose() {
+    setNewOrderTable(null);
+    refetch();
+    loadTableOrders();
   }
 
   function handlePanelClose() {
@@ -72,6 +82,11 @@ export default function TablesScreen() {
 
   return (
     <View style={styles.container}>
+      {error ? (
+        <View style={styles.errorBanner}>
+          <Text style={styles.errorText}>Hata: {error}</Text>
+        </View>
+      ) : null}
       <View style={styles.summary}>
         <View style={styles.chip}>
           <Text style={styles.chipLabel}>Toplam Ciro</Text>
@@ -114,7 +129,7 @@ export default function TablesScreen() {
       <Modal
         visible={panelVisible}
         animationType="slide"
-        presentationStyle="pageSheet"
+        presentationStyle={Platform.OS === 'ios' ? 'pageSheet' : 'fullScreen'}
         onRequestClose={handlePanelClose}
       >
         {selectedTable && (
@@ -126,6 +141,14 @@ export default function TablesScreen() {
           />
         )}
       </Modal>
+
+      <NewOrderModal
+        visible={!!newOrderTable}
+        table={newOrderTable}
+        onClose={handleNewOrderClose}
+        createOrder={createOrder}
+        updateTableStatus={updateTableStatus}
+      />
     </View>
   );
 }
@@ -182,4 +205,6 @@ const styles = StyleSheet.create({
     fontSize: moderateScale(15),
     marginTop: verticalScale(48),
   },
+  errorBanner: { backgroundColor: colors.dangerLight, padding: scale(12), borderBottomWidth: 1, borderBottomColor: colors.danger },
+  errorText: { color: colors.danger, fontSize: moderateScale(13), fontWeight: '600' },
 });

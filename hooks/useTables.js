@@ -10,10 +10,17 @@ export function useTables() {
     try {
       const { data, error } = await supabase
         .from('tables')
-        .select('*')
-        .order('name');
+        .select('*');
       if (error) throw error;
-      setTables(data || []);
+      // Natural sort by trailing number in name (Masa 1, Masa 2, …, Masa 10)
+      // so "Masa 10" doesn't come before "Masa 2" lexicographically.
+      const sorted = (data || []).slice().sort((a, b) => {
+        const na = parseInt(String(a.name).match(/\d+/)?.[0] ?? '', 10);
+        const nb = parseInt(String(b.name).match(/\d+/)?.[0] ?? '', 10);
+        if (!isNaN(na) && !isNaN(nb) && na !== nb) return na - nb;
+        return String(a.name).localeCompare(String(b.name), 'tr');
+      });
+      setTables(sorted);
     } catch (e) {
       setError(e.message);
     } finally {
