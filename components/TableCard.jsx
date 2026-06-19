@@ -1,28 +1,25 @@
-import { useEffect, useState } from 'react';
-import { TouchableOpacity, View, Text, StyleSheet } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
-import { scale, verticalScale, moderateScale } from 'react-native-size-matters';
-import { Badge } from './shared/Badge';
-import { colors } from '../styles/colors';
-
+import MaterialIcons from "@expo/vector-icons/MaterialIcons";
+import { useEffect, useState } from "react";
+import { StyleSheet, Text, TouchableOpacity } from "react-native";
+import { moderateScale, scale, verticalScale } from "react-native-size-matters";
+import { colors } from "../styles/colors";
 function getTimeOpen(createdAt) {
-  if (!createdAt) return '';
+  if (!createdAt) return "";
   const diff = Math.floor((Date.now() - new Date(createdAt)) / 60000);
-  if (diff < 1) return 'az önce';
+  if (diff < 1) return "az önce";
   if (diff < 60) return `${diff} dk`;
   return `${Math.floor(diff / 60)} sa ${diff % 60} dk`;
 }
 
 export function TableCard({ table, order, onPress, isSelected }) {
-  const isOccupied = table.status === 'occupied';
-  const itemCount = order?.order_items?.length || 0;
+  const isOccupied = table.status === "occupied";
   const total = order?.total || 0;
 
-  // Tick every 30s so the elapsed time updates live without a refetch.
+  // Tick every 30s so elapsed time updates live without a refetch.
   const [, setTick] = useState(0);
   useEffect(() => {
     if (!isOccupied || !order?.created_at) return;
-    const id = setInterval(() => setTick(t => t + 1), 30000);
+    const id = setInterval(() => setTick((t) => t + 1), 30000);
     return () => clearInterval(id);
   }, [isOccupied, order?.created_at]);
 
@@ -30,93 +27,117 @@ export function TableCard({ table, order, onPress, isSelected }) {
     <TouchableOpacity
       style={[
         styles.card,
-        isOccupied && styles.occupied,
-        isSelected && styles.selected,
+        isOccupied ? styles.cardActive : styles.cardEmpty,
+        isSelected && styles.cardSelected,
       ]}
       onPress={onPress}
       activeOpacity={0.85}
     >
-      <View style={styles.header}>
-        <Text style={styles.tableName}>{table.name}</Text>
-        <Badge
-          label={isOccupied ? 'Dolu' : 'Boş'}
-          variant={isOccupied ? 'success' : 'default'}
-        />
-      </View>
+      {isOccupied && <Text style={styles.activeTag}>AKTİF</Text>}
+
+      <MaterialIcons
+        name="table-restaurant"
+        size={moderateScale(32)}
+        color={isOccupied ? colors.onSecondaryContainer : colors.outline}
+        style={[styles.icon, !isOccupied && styles.iconEmpty]}
+      />
+
+      <Text
+        style={[
+          styles.tableName,
+          isOccupied ? styles.tableNameActive : styles.tableNameEmpty,
+        ]}
+      >
+        {table.name}
+      </Text>
+
       {isOccupied && order ? (
-        <View style={styles.info}>
-          <Text style={styles.itemCount}>{itemCount} ürün</Text>
-          <Text style={styles.total}>₺{Number(total).toFixed(2)}</Text>
-          <View style={styles.timeRow}>
-            <Ionicons name="time-outline" size={moderateScale(11)} color={colors.textMuted} />
-            <Text style={styles.time}>{getTimeOpen(order.created_at)}</Text>
-          </View>
-        </View>
+        <Text style={styles.total}>₺{Number(total).toFixed(2)}</Text>
       ) : (
-        <Text style={styles.empty}>Boş masa</Text>
+        <Text style={styles.emptyLabel}>Boş</Text>
       )}
+
+      {isOccupied && order?.created_at ? (
+        <Text style={styles.time}>{getTimeOpen(order.created_at)}</Text>
+      ) : null}
     </TouchableOpacity>
   );
 }
 
 const styles = StyleSheet.create({
   card: {
-    backgroundColor: colors.bgCard,
-    borderRadius: moderateScale(10),
+    aspectRatio: 1,
+    borderRadius: moderateScale(16),
+    alignItems: "center",
+    justifyContent: "center",
     padding: scale(12),
-    borderWidth: 1,
-    borderColor: colors.border,
-    borderLeftWidth: scale(3),
-    borderLeftColor: 'transparent',
-    shadowColor: colors.shadow,
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 1,
-    shadowRadius: 3,
+    position: "relative",
+  },
+  cardActive: {
+    backgroundColor: colors.secondaryContainer,
+    shadowColor: colors.onSurface,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.06,
+    shadowRadius: 16,
     elevation: 2,
   },
-  occupied: {
-    borderLeftColor: colors.success,
+  cardEmpty: {
+    backgroundColor: colors.surfaceContainerLow,
+    borderWidth: scale(1.5),
+    borderColor: colors.outlineVariant,
+    borderStyle: "dashed",
   },
-  selected: {
-    borderLeftColor: colors.accent,
-    backgroundColor: colors.accentLight,
+  cardSelected: {
+    backgroundColor: colors.primaryContainer,
   },
-  header: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: verticalScale(8),
+  activeTag: {
+    position: "absolute",
+    top: scale(10),
+    right: scale(12),
+    fontSize: moderateScale(9),
+    fontWeight: "800",
+    letterSpacing: 1.5,
+    color: colors.onSecondaryContainer,
+    opacity: 0.6,
+  },
+  icon: {
+    marginBottom: verticalScale(6),
+  },
+  iconEmpty: {
+    opacity: 0.3,
   },
   tableName: {
-    fontSize: moderateScale(15),
-    fontWeight: '700',
-    color: colors.textPrimary,
+    fontSize: moderateScale(17),
+    fontWeight: "800",
+    letterSpacing: -0.3,
   },
-  info: {
-    gap: verticalScale(2),
+  tableNameActive: {
+    color: colors.onSecondaryContainer,
   },
-  itemCount: {
-    fontSize: moderateScale(13),
-    color: colors.textSecondary,
+  tableNameEmpty: {
+    color: colors.onSurfaceVariant,
+    fontWeight: "700",
   },
   total: {
-    fontSize: moderateScale(16),
-    fontWeight: '700',
-    color: colors.textPrimary,
-  },
-  timeRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: scale(3),
+    fontSize: moderateScale(11),
+    fontWeight: "600",
+    color: colors.onSecondaryContainer,
     marginTop: verticalScale(2),
+    opacity: 0.8,
+  },
+  emptyLabel: {
+    fontSize: moderateScale(11),
+    fontWeight: "500",
+    color: colors.outline,
+    marginTop: verticalScale(2),
+    opacity: 0.7,
   },
   time: {
-    fontSize: moderateScale(11),
-    color: colors.textMuted,
-  },
-  empty: {
-    fontSize: moderateScale(13),
-    color: colors.textMuted,
-    fontStyle: 'italic',
+    fontSize: moderateScale(9),
+    color: colors.onSecondaryContainer,
+    marginTop: verticalScale(2),
+    opacity: 0.55,
+    fontWeight: "500",
+    letterSpacing: 0.5,
   },
 });

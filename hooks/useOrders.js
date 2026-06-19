@@ -95,24 +95,82 @@ export function useOrders(filter = 'all') {
   }
 
   async function closeOrder(orderId, tableId, paymentMethod, total) {
-    const { error: orderError } = await supabase
-      .from('orders')
-      .update({
-        status: 'completed',
-        payment_method: paymentMethod,
-        total,
-        closed_at: new Date().toISOString(),
-        closed_by: user?.id ?? null,
-        waiter_name: profile?.full_name ?? null,
-      })
-      .eq('id', orderId);
-    if (orderError) throw orderError;
+    // Backward-compat single-payment close: emits one payment row, then completes.
+    return addPayments(orderId, tableId, [{ amount: total, payment_method: paymentMethod }]);
+  }
 
-    const { error: tableError } = await supabase
-      .from('tables')
-      .update({ status: 'empty' })
-      .eq('id', tableId);
-    if (tableError) throw tableError;
+  async function getOrderPayments(orderId) {
+    const { data, error } = await supabase
+      .from('payments')
+      .select('*')
+      .eq('order_id', orderId)
+      .order('created_at', { ascending: true });
+    if (error) throw error;
+    return data || [];
+  }
+
+  // Inserts one or more payment rows for an order. If the cumulative paid amount
+  // covers the order total, the order is marked completed and the table is freed.
+  // Returns { paid, remaining, completed }.
+  async function addPayments(orderId, tableId, rows) {
+    if (!rows || rows.length === 0) {
+      throw new Error('En az bir ödeme gerekli.');
+    }
+
+    const insertRows = rows.map(r => ({
+      order_id: orderId,
+      amount: Number(r.amount),
+      payment_method: r.payment_method,
+      payer_label: r.payer_label || null,
+      processed_by: user?.id ?? null,
+      device: 'mobile',
+    }));
+
+    const { error: payError } = await supabase.from('payments').insert(insertRows);
+    if (payError) throw payError;
+
+    const [{ data: payments, error: fetchError }, { data: orderRow, error: orderFetchError }] = await Promise.all([
+      supabase.from('payments').select('amount, payment_method').eq('order_id', orderId),
+      supabase.from('orders').select('total').eq('id', orderId).single(),
+    ]);
+    if (fetchError) throw fetchError;
+    if (orderFetchError) throw orderFetchError;
+
+    const paid = (payments || []).reduce((s, p) => s + Number(p.amount), 0);
+    const total = Number(orderRow?.total || 0);
+    const remaining = Math.max(total - paid, 0);
+    const completed = paid + 0.001 >= total; // tolerate 1-kuruş drift
+
+    if (completed) {
+      // Pick the dominant payment method (largest sum) for the order's display field.
+      const byMethod = {};
+      (payments || []).forEach(p => {
+        byMethod[p.payment_method] = (byMethod[p.payment_method] || 0) + Number(p.amount);
+      });
+      const dominantMethod = Object.entries(byMethod).sort((a, b) => b[1] - a[1])[0]?.[0] || null;
+
+      const { error: orderUpdateError } = await supabase
+        .from('orders')
+        .update({
+          status: 'completed',
+          payment_method: dominantMethod,
+          closed_at: new Date().toISOString(),
+          closed_by: user?.id ?? null,
+          waiter_name: profile?.full_name ?? null,
+        })
+        .eq('id', orderId);
+      if (orderUpdateError) throw orderUpdateError;
+
+      if (tableId) {
+        const { error: tableError } = await supabase
+          .from('tables')
+          .update({ status: 'empty' })
+          .eq('id', tableId);
+        if (tableError) throw tableError;
+      }
+    }
+
+    return { paid, remaining, completed };
   }
 
   async function cancelOrder(orderId, tableId) {
@@ -129,5 +187,48 @@ export function useOrders(filter = 'all') {
     if (tableError) throw tableError;
   }
 
-  return { orders, loading, error, refetch: fetchOrders, createOrder, closeOrder, cancelOrder };
+  async function addItemsToOrder(orderId, items) {
+    if (!items || items.length === 0) return;
+    const rows = items.map(item => ({
+      order_id: orderId,
+      product_id: item.product_id,
+      quantity: item.quantity,
+      unit_price: item.unit_price,
+      local_id: uuidv4(),
+      is_synced: true,
+    }));
+    const { error } = await supabase.from('order_items').insert(rows);
+    if (error) throw error;
+  }
+
+  async function updateOrderItemQty(itemId, quantity) {
+    const { error } = await supabase
+      .from('order_items')
+      .update({ quantity })
+      .eq('id', itemId);
+    if (error) throw error;
+  }
+
+  async function deleteOrderItem(itemId) {
+    const { error } = await supabase
+      .from('order_items')
+      .delete()
+      .eq('id', itemId);
+    if (error) throw error;
+  }
+
+  async function updateOrderTotal(orderId, total) {
+    const { error } = await supabase
+      .from('orders')
+      .update({ total })
+      .eq('id', orderId);
+    if (error) throw error;
+  }
+
+  return {
+    orders, loading, error, refetch: fetchOrders,
+    createOrder, closeOrder, cancelOrder,
+    addItemsToOrder, updateOrderItemQty, deleteOrderItem, updateOrderTotal,
+    getOrderPayments, addPayments,
+  };
 }

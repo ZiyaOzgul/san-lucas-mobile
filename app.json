@@ -7,7 +7,6 @@
     "icon": "./assets/images/san-lucas-coffee-logo.png",
     "scheme": "sanlucasmobile",
     "userInterfaceStyle": "automatic",
-
     "ios": {
       "supportsTablet": true
     },
@@ -16,7 +15,6 @@
         "foregroundImage": "./assets/images/san-lucas-coffee-logo.png",
         "backgroundColor": "#ffffff"
       },
-
       "predictiveBackGestureEnabled": false,
       "package": "com.lyzadev.sanlucasmobile"
     },
@@ -38,6 +36,13 @@
     ],
     "experiments": {
       "typedRoutes": true
-    }
+    },
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "3a1c8a05-bcd5-40ae-a8bf-1c4c20006f08"
+      }
+    },
+    "owner": "lyzadev"
   }
 }

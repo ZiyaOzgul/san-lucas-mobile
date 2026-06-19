@@ -1,21 +1,26 @@
 import { Tabs, useRouter } from 'expo-router';
 import { useEffect } from 'react';
-import { Platform, View, Text, TouchableOpacity, StyleSheet } from 'react-native';
+import { Platform, View, StyleSheet } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { scale, verticalScale, moderateScale } from 'react-native-size-matters';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../../hooks/useAuth';
 import { colors } from '../../styles/colors';
 
-function TabBarIcon({ name, color }) {
-  return <Ionicons name={name} size={moderateScale(22)} color={color} />;
+function TabBarIcon({ name, nameFilled, focused, color }) {
+  return (
+    <View style={styles.iconWrap}>
+      <Ionicons name={focused ? (nameFilled || name) : name} size={moderateScale(22)} color={color} />
+      <View style={[styles.activeDot, { opacity: focused ? 1 : 0 }]} />
+    </View>
+  );
 }
 
 export default function TabLayout() {
   const { user, loading, isAdmin } = useAuth();
   const router = useRouter();
   const insets = useSafeAreaInsets();
-  const tabBarHeight = verticalScale(56) + (Platform.OS === 'ios' ? insets.bottom : 0);
+  const tabBarHeight = verticalScale(60) + (Platform.OS === 'ios' ? insets.bottom : verticalScale(8));
 
   useEffect(() => {
     if (!loading && !user) {
@@ -28,29 +33,37 @@ export default function TabLayout() {
   return (
     <Tabs
       screenOptions={{
-        tabBarActiveTintColor: colors.accent,
-        tabBarInactiveTintColor: colors.textMuted,
+        headerShown: false,
+        tabBarActiveTintColor: colors.primary,
+        tabBarInactiveTintColor: colors.outline,
+        tabBarShowLabel: true,
         tabBarStyle: {
-          backgroundColor: colors.bgCard,
-          borderTopColor: colors.border,
-          borderTopWidth: 1,
+          backgroundColor: 'rgba(249,250,242,0.92)',
+          borderTopWidth: 0,
+          borderTopLeftRadius: moderateScale(20),
+          borderTopRightRadius: moderateScale(20),
           height: tabBarHeight,
-          paddingBottom: Platform.OS === 'ios' ? insets.bottom : verticalScale(6),
-          paddingTop: verticalScale(4),
+          paddingBottom: Platform.OS === 'ios' ? insets.bottom : verticalScale(8),
+          paddingTop: verticalScale(8),
+          position: 'absolute',
+          left: 0,
+          right: 0,
+          bottom: 0,
+          shadowColor: colors.onSurface,
+          shadowOffset: { width: 0, height: -8 },
+          shadowOpacity: 0.06,
+          shadowRadius: 32,
+          elevation: 12,
         },
         tabBarLabelStyle: {
-          fontSize: moderateScale(11),
-          fontWeight: '600',
-        },
-        headerStyle: {
-          backgroundColor: colors.bgCard,
-          borderBottomColor: colors.border,
-          borderBottomWidth: 1,
-        },
-        headerTintColor: colors.textPrimary,
-        headerTitleStyle: {
+          fontSize: moderateScale(9),
           fontWeight: '700',
-          fontSize: moderateScale(17),
+          letterSpacing: 1.2,
+          textTransform: 'uppercase',
+          marginTop: verticalScale(2),
+        },
+        tabBarItemStyle: {
+          paddingTop: verticalScale(4),
         },
       }}
     >
@@ -58,45 +71,57 @@ export default function TabLayout() {
         name="tables"
         options={{
           title: 'Masalar',
-          tabBarIcon: ({ color }) => <TabBarIcon name="grid-outline" color={color} />,
+          tabBarIcon: ({ color, focused }) => (
+            <TabBarIcon name="grid-outline" nameFilled="grid" focused={focused} color={color} />
+          ),
         }}
       />
       <Tabs.Screen
         name="orders"
         options={{
           title: 'Siparişler',
-          tabBarIcon: ({ color }) => <TabBarIcon name="receipt-outline" color={color} />,
+          tabBarIcon: ({ color, focused }) => (
+            <TabBarIcon name="receipt-outline" nameFilled="receipt" focused={focused} color={color} />
+          ),
         }}
       />
       <Tabs.Screen
         name="products"
         options={{
           title: 'Ürünler',
-          tabBarIcon: ({ color }) => <TabBarIcon name="cube-outline" color={color} />,
+          tabBarIcon: ({ color, focused }) => (
+            <TabBarIcon name="cube-outline" nameFilled="cube" focused={focused} color={color} />
+          ),
           href: isAdmin ? '/products' : null,
         }}
       />
       <Tabs.Screen
         name="ingredients"
         options={{
-          title: 'Malzemeler',
-          tabBarIcon: ({ color }) => <TabBarIcon name="flask-outline" color={color} />,
+          title: 'Malzeme',
+          tabBarIcon: ({ color, focused }) => (
+            <TabBarIcon name="flask-outline" nameFilled="flask" focused={focused} color={color} />
+          ),
           href: isAdmin ? '/ingredients' : null,
         }}
       />
       <Tabs.Screen
         name="reports"
         options={{
-          title: 'Raporlar',
-          tabBarIcon: ({ color }) => <TabBarIcon name="bar-chart-outline" color={color} />,
+          title: 'Rapor',
+          tabBarIcon: ({ color, focused }) => (
+            <TabBarIcon name="bar-chart-outline" nameFilled="bar-chart" focused={focused} color={color} />
+          ),
           href: isAdmin ? '/reports' : null,
         }}
       />
       <Tabs.Screen
         name="employees"
         options={{
-          title: 'Çalışanlar',
-          tabBarIcon: ({ color }) => <TabBarIcon name="people-outline" color={color} />,
+          title: 'Personel',
+          tabBarIcon: ({ color, focused }) => (
+            <TabBarIcon name="people-outline" nameFilled="people" focused={focused} color={color} />
+          ),
           href: isAdmin ? '/employees' : null,
         }}
       />
@@ -104,10 +129,26 @@ export default function TabLayout() {
         name="settings"
         options={{
           title: 'Ayarlar',
-          tabBarIcon: ({ color }) => <TabBarIcon name="settings-outline" color={color} />,
+          tabBarIcon: ({ color, focused }) => (
+            <TabBarIcon name="settings-outline" nameFilled="settings" focused={focused} color={color} />
+          ),
           href: isAdmin ? '/settings' : null,
         }}
       />
     </Tabs>
   );
 }
+
+const styles = StyleSheet.create({
+  iconWrap: {
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  activeDot: {
+    width: moderateScale(4),
+    height: moderateScale(4),
+    borderRadius: moderateScale(2),
+    backgroundColor: colors.primary,
+    marginTop: verticalScale(3),
+  },
+});

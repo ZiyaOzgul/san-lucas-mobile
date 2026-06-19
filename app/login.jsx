@@ -1,103 +1,120 @@
-import { useState } from 'react';
-import { View, Text, TextInput, StyleSheet, Alert, KeyboardAvoidingView, Platform, ScrollView, Pressable } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
-import { useRouter } from 'expo-router';
-import { scale, verticalScale, moderateScale } from 'react-native-size-matters';
-import { Ionicons } from '@expo/vector-icons';
-import { Button } from '../components/shared/Button';
-import { signIn } from '../lib/auth';
-import { colors } from '../styles/colors';
+import { Ionicons } from "@expo/vector-icons";
+import { useRouter } from "expo-router";
+
+import { useState } from "react";
+import {
+  KeyboardAvoidingView,
+  Platform,
+  Pressable,
+  ScrollView,
+  StatusBar,
+  StyleSheet,
+  Text,
+  TextInput,
+  View,
+} from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
+import { moderateScale, scale, verticalScale } from "react-native-size-matters";
+import { Button } from "../components/shared/Button";
+import { signIn } from "../lib/auth";
+import { colors } from "../styles/colors";
 
 export default function Login() {
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState('');
+  const [error, setError] = useState("");
   const router = useRouter();
 
   async function handleLogin() {
     if (!email || !password) {
-      setError('E-posta ve şifre gereklidir.');
+      setError("E-posta ve şifre gereklidir.");
       return;
     }
     setLoading(true);
-    setError('');
+    setError("");
     try {
       await signIn(email.trim(), password);
-      router.replace('/(tabs)/tables');
+      router.replace("/(tabs)/tables");
     } catch (e) {
-      setError('Geçersiz e-posta veya şifre.');
+      setError("Geçersiz e-posta veya şifre.");
     } finally {
       setLoading(false);
     }
   }
 
   return (
-    <SafeAreaView style={styles.safeArea} edges={['top', 'bottom']}>
+    <SafeAreaView style={styles.safeArea} edges={["top", "bottom"]}>
       <KeyboardAvoidingView
         style={styles.container}
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-        keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : verticalScale(20)}
+        behavior={Platform.OS === "ios" ? "padding" : "height"}
+        keyboardVerticalOffset={Platform.OS === "ios" ? 0 : verticalScale(20)}
       >
-      <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
-        <View style={styles.logoArea}>
-          <Text style={styles.logoIcon}>☕</Text>
-          <Text style={styles.appName}>San Lucas</Text>
-          <Text style={styles.subtitle}>Kafe Yönetim Sistemi</Text>
-        </View>
-
-        <View style={styles.form}>
-          <Text style={styles.label}>E-posta</Text>
-          <TextInput
-            style={styles.input}
-            value={email}
-            onChangeText={setEmail}
-            placeholder="ornek@email.com"
-            placeholderTextColor={colors.textMuted}
-            keyboardType="email-address"
-            autoCapitalize="none"
-            autoCorrect={false}
-          />
-
-          <Text style={styles.label}>Şifre</Text>
-          <View style={styles.passwordWrapper}>
-            <TextInput
-              style={styles.passwordInput}
-              value={password}
-              onChangeText={setPassword}
-              placeholder="••••••••"
-              placeholderTextColor={colors.textMuted}
-              secureTextEntry={!showPassword}
-              autoCapitalize='none'
-              autoCorrect={false}
-            />
-            <Pressable
-              onPress={() => setShowPassword((v) => !v)}
-              hitSlop={scale(8)}
-              style={styles.passwordToggle}
-              accessibilityRole="button"
-              accessibilityLabel={showPassword ? 'Şifreyi gizle' : 'Şifreyi göster'}
-            >
-              <Ionicons
-                name={showPassword ? 'eye-off-outline' : 'eye-outline'}
-                size={moderateScale(20)}
-                color={colors.textSecondary}
-              />
-            </Pressable>
+        <ScrollView
+          contentContainerStyle={styles.scroll}
+          keyboardShouldPersistTaps="handled"
+        >
+          <View style={styles.logoArea}>
+            <Text style={styles.logoIcon}>☕</Text>
+            <Text style={styles.appName}>San Lucas</Text>
+            <Text style={styles.subtitle}>Kafe Yönetim Sistemi</Text>
           </View>
 
-          {error ? <Text style={styles.error}>{error}</Text> : null}
+          <View style={styles.form}>
+            <Text style={styles.label}>E-posta</Text>
+            <TextInput
+              style={styles.input}
+              value={email}
+              onChangeText={setEmail}
+              placeholder="ornek@email.com"
+              placeholderTextColor={colors.textMuted}
+              keyboardType="email-address"
+              autoCapitalize="none"
+              autoCorrect={false}
+            />
 
-          <Button
-            title="Giriş Yap"
-            onPress={handleLogin}
-            loading={loading}
-            style={styles.loginBtn}
-          />
-        </View>
-      </ScrollView>
+            <Text style={styles.label}>Şifre</Text>
+            <View style={styles.passwordWrapper}>
+              <TextInput
+                style={styles.passwordInput}
+                value={password}
+                onChangeText={setPassword}
+                placeholder="••••••••"
+                placeholderTextColor={colors.textMuted}
+                secureTextEntry={!showPassword}
+                autoCapitalize="none"
+                autoCorrect={false}
+              />
+              <Pressable
+                onPress={() => setShowPassword((v) => !v)}
+                hitSlop={scale(8)}
+                style={styles.passwordToggle}
+                accessibilityRole="button"
+                accessibilityLabel={
+                  showPassword ? "Şifreyi gizle" : "Şifreyi göster"
+                }
+              >
+                <Ionicons
+                  name={showPassword ? "eye-off-outline" : "eye-outline"}
+                  size={moderateScale(20)}
+                  color={colors.textSecondary}
+                />
+              </Pressable>
+            </View>
+
+            {error ? <Text style={styles.error}>{error}</Text> : null}
+
+            <Button
+              title="Giriş Yap"
+              onPress={handleLogin}
+              loading={loading}
+              style={styles.loginBtn}
+            />
+          </View>
+        </ScrollView>
       </KeyboardAvoidingView>
+      <StatusBar barStyle="dark-content" />
     </SafeAreaView>
   );
 }
@@ -113,11 +130,11 @@ const styles = StyleSheet.create({
   },
   scroll: {
     flexGrow: 1,
-    justifyContent: 'center',
+    justifyContent: "center",
     padding: scale(24),
   },
   logoArea: {
-    alignItems: 'center',
+    alignItems: "center",
     marginBottom: verticalScale(48),
   },
   logoIcon: {
@@ -126,7 +143,7 @@ const styles = StyleSheet.create({
   },
   appName: {
     fontSize: moderateScale(32),
-    fontWeight: '800',
+    fontWeight: "800",
     color: colors.textPrimary,
     letterSpacing: 1,
   },
@@ -139,7 +156,7 @@ const styles = StyleSheet.create({
     backgroundColor: colors.bgCard,
     borderRadius: moderateScale(12),
     padding: scale(20),
-    shadowColor: '#000',
+    shadowColor: "#000",
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.08,
     shadowRadius: 8,
@@ -147,7 +164,7 @@ const styles = StyleSheet.create({
   },
   label: {
     fontSize: moderateScale(13),
-    fontWeight: '600',
+    fontWeight: "600",
     color: colors.textSecondary,
     marginBottom: verticalScale(6),
   },
@@ -163,8 +180,8 @@ const styles = StyleSheet.create({
     marginBottom: verticalScale(16),
   },
   passwordWrapper: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     borderWidth: 1,
     borderColor: colors.border,
     borderRadius: moderateScale(8),
@@ -186,10 +203,10 @@ const styles = StyleSheet.create({
     fontSize: moderateScale(13),
     color: colors.danger,
     marginBottom: verticalScale(12),
-    textAlign: 'center',
+    textAlign: "center",
   },
   loginBtn: {
-    width: '100%',
+    width: "100%",
     marginTop: verticalScale(4),
   },
 });
