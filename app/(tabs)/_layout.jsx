@@ -17,18 +17,21 @@ function TabBarIcon({ name, nameFilled, focused, color }) {
 }
 
 export default function TabLayout() {
-  const { user, loading, isAdmin } = useAuth();
+  const { user, profile, loading, isAdmin } = useAuth();
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const tabBarHeight = verticalScale(60) + (Platform.OS === 'ios' ? insets.bottom : verticalScale(8));
 
   useEffect(() => {
-    if (!loading && !user) {
+    if (loading) return;
+    if (!user) {
       router.replace('/login');
+    } else if (profile?.role === 'customer') {
+      router.replace('/customer/(tabs)');
     }
-  }, [user, loading]);
+  }, [user, profile, loading]);
 
-  if (loading || !user) return null;
+  if (loading || !user || profile?.role === 'customer') return null;
 
   return (
     <Tabs

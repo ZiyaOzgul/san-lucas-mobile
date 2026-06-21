@@ -225,10 +225,74 @@ export function useOrders(filter = 'all') {
     if (error) throw error;
   }
 
+  // Moves a whole active order from one table to another empty table.
+  async function transferOrder(orderId, fromTableId, toTableId) {
+    const { error: orderError } = await supabase
+      .from('orders')
+      .update({ table_id: toTableId })
+      .eq('id', orderId);
+    if (orderError) throw orderError;
+
+    const { error: toError } = await supabase
+      .from('tables')
+      .update({ status: 'occupied' })
+      .eq('id', toTableId);
+    if (toError) throw toError;
+
+    const { error: fromError } = await supabase
+      .from('tables')
+      .update({ status: 'empty' })
+      .eq('id', fromTableId);
+    if (fromError) throw fromError;
+  }
+
+  // Moves selected order_items from source order into target (existing active) order.
+  // Recalculates totals on both. If source becomes empty, it's cancelled and the table freed.
+  async function transferItemsToOrder(itemIds, sourceOrderId, sourceTableId, targetOrderId) {
+    if (!itemIds || itemIds.length === 0) return { sourceEmptied: false };
+
+    const { error: moveError } = await supabase
+      .from('order_items')
+      .update({ order_id: targetOrderId })
+      .in('id', itemIds);
+    if (moveError) throw moveError;
+
+    const [sourceItemsRes, targetItemsRes] = await Promise.all([
+      supabase.from('order_items').select('quantity, unit_price').eq('order_id', sourceOrderId),
+      supabase.from('order_items').select('quantity, unit_price').eq('order_id', targetOrderId),
+    ]);
+    if (sourceItemsRes.error) throw sourceItemsRes.error;
+    if (targetItemsRes.error) throw targetItemsRes.error;
+
+    const sumOf = rows => (rows || []).reduce((s, r) => s + Number(r.unit_price) * Number(r.quantity), 0);
+    const sourceTotal = sumOf(sourceItemsRes.data);
+    const targetTotal = sumOf(targetItemsRes.data);
+
+    const { error: targetUpdateError } = await supabase
+      .from('orders')
+      .update({ total: targetTotal })
+      .eq('id', targetOrderId);
+    if (targetUpdateError) throw targetUpdateError;
+
+    if ((sourceItemsRes.data || []).length === 0) {
+      await cancelOrder(sourceOrderId, sourceTableId);
+      return { sourceEmptied: true };
+    }
+
+    const { error: sourceUpdateError } = await supabase
+      .from('orders')
+      .update({ total: sourceTotal })
+      .eq('id', sourceOrderId);
+    if (sourceUpdateError) throw sourceUpdateError;
+
+    return { sourceEmptied: false };
+  }
+
   return {
     orders, loading, error, refetch: fetchOrders,
     createOrder, closeOrder, cancelOrder,
     addItemsToOrder, updateOrderItemQty, deleteOrderItem, updateOrderTotal,
     getOrderPayments, addPayments,
+    transferOrder, transferItemsToOrder,
   };
 }

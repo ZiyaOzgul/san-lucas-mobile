@@ -9,6 +9,7 @@ import { scale, verticalScale, moderateScale } from 'react-native-size-matters';
 import Animated, { useSharedValue, useAnimatedStyle, withSpring, withTiming } from 'react-native-reanimated';
 import { useProducts } from '../hooks/useProducts';
 import { CloseTableModal } from './CloseTableModal';
+import { TablePickerModal } from './TablePickerModal';
 import { colors } from '../styles/colors';
 
 function PressScale({ style, onPress, children, scaleTo = 0.96 }) {
@@ -27,6 +28,7 @@ function PressScale({ style, onPress, children, scaleTo = 0.96 }) {
 
 export function OrderPanel({
   table,
+  tables = [],
   onClose,
   getActiveOrder,
   closeOrder,
@@ -38,6 +40,8 @@ export function OrderPanel({
   updateOrderTotal,
   getOrderPayments,
   addPayments,
+  transferOrder,
+  transferItemsToOrder,
 }) {
   const { products, categories, loading: productsLoading } = useProducts();
 
@@ -55,6 +59,13 @@ export function OrderPanel({
   const [selectedCategory, setSelectedCategory] = useState('all');
   const [search, setSearch] = useState('');
   const [variantProduct, setVariantProduct] = useState(null);
+
+  // Transfer state
+  const [selectionMode, setSelectionMode] = useState('none'); // 'none' | 'transfer'
+  const [selectedItemIds, setSelectedItemIds] = useState(new Set());
+  const [pickerVisible, setPickerVisible] = useState(false);
+  const [pickerMode, setPickerMode] = useState('emptyOnly'); // 'emptyOnly' | 'occupiedOnly'
+  const [transferring, setTransferring] = useState(false);
 
   useEffect(() => {
     if (table) loadOrder();
@@ -230,6 +241,80 @@ export function OrderPanel({
     onClose();
   }
 
+  // ── Transfer flows ─────────────────────────────────────────
+  function enterTransferMode() {
+    if (hasPendingChanges) {
+      Alert.alert('Önce Kaydet', 'Taşıma yapmadan önce kaydedilmemiş değişiklikleri kaydedin.');
+      return;
+    }
+    setSelectionMode('transfer');
+    setSelectedItemIds(new Set());
+  }
+
+  function exitTransferMode() {
+    setSelectionMode('none');
+    setSelectedItemIds(new Set());
+  }
+
+  function toggleItemSelection(itemId) {
+    setSelectedItemIds(prev => {
+      const next = new Set(prev);
+      if (next.has(itemId)) next.delete(itemId);
+      else next.add(itemId);
+      return next;
+    });
+  }
+
+  function openTableTransferPicker() {
+    if (hasPendingChanges) {
+      Alert.alert('Önce Kaydet', 'Masa taşımadan önce kaydedilmemiş değişiklikleri kaydedin.');
+      return;
+    }
+    if (isNewOrder) return;
+    setPickerMode('emptyOnly');
+    setPickerVisible(true);
+  }
+
+  function openItemTransferPicker() {
+    if (selectedItemIds.size === 0) {
+      Alert.alert('Seçim Yok', 'Taşımak için en az bir ürün seçin.');
+      return;
+    }
+    setPickerMode('occupiedOnly');
+    setPickerVisible(true);
+  }
+
+  async function handlePickerSelect(targetTable) {
+    setPickerVisible(false);
+    setTransferring(true);
+    try {
+      if (pickerMode === 'emptyOnly') {
+        // Whole-order transfer to empty table
+        await transferOrder(order.id, table.id, targetTable.id);
+        onClose();
+      } else {
+        // Items transfer to existing active order
+        const targetOrder = await getActiveOrder(targetTable.id);
+        if (!targetOrder) {
+          Alert.alert('Hata', 'Hedef masada aktif adisyon bulunamadı.');
+          return;
+        }
+        const ids = Array.from(selectedItemIds);
+        const result = await transferItemsToOrder(ids, order.id, table.id, targetOrder.id);
+        if (result?.sourceEmptied) {
+          onClose();
+        } else {
+          exitTransferMode();
+          await loadOrder();
+        }
+      }
+    } catch (e) {
+      Alert.alert('Hata', e.message);
+    } finally {
+      setTransferring(false);
+    }
+  }
+
   // ── Product filter ──────────────────────────────────────────
   const filteredProducts = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -292,6 +377,9 @@ export function OrderPanel({
                   onMinus={() => bumpExistingQty(item, -1)}
                   onPlus={() => bumpExistingQty(item, 1)}
                   onDelete={() => removeExisting(item)}
+                  selectionMode={selectionMode === 'transfer'}
+                  selected={selectedItemIds.has(item.id)}
+                  onToggleSelect={() => toggleItemSelection(item.id)}
                 />
               ))}
               {newItems.map(item => (
@@ -356,37 +444,86 @@ export function OrderPanel({
 
       {/* ── Bottom Action Bar ───────────────────────────────── */}
       <View style={styles.bottomBar}>
-        <View style={styles.bottomRow}>
-          <View>
-            <Text style={styles.bottomLabel}>TOPLAM TUTAR</Text>
-            <Text style={styles.bottomTotal}>₺{total.toFixed(2)}</Text>
-          </View>
-          {!isNewOrder && (
-            <PressScale style={styles.closeTablePill} onPress={() => setShowCloseModal(true)}>
-              <Ionicons name="card-outline" size={moderateScale(14)} color={colors.secondaryContainer} />
-              <Text style={styles.closeTablePillText}>Adisyonu Kapat</Text>
+        {selectionMode === 'transfer' ? (
+          <>
+            <View style={styles.bottomRow}>
+              <View>
+                <Text style={styles.bottomLabel}>SEÇİLEN ÜRÜN</Text>
+                <Text style={styles.bottomTotal}>{selectedItemIds.size}</Text>
+              </View>
+              <PressScale style={styles.transferCancelPill} onPress={exitTransferMode}>
+                <Text style={styles.transferCancelText}>Vazgeç</Text>
+              </PressScale>
+            </View>
+            <PressScale
+              style={[styles.saveBtn, (selectedItemIds.size === 0 || transferring) && styles.saveBtnDisabled]}
+              onPress={openItemTransferPicker}
+            >
+              {transferring ? (
+                <ActivityIndicator color={colors.secondaryContainer} />
+              ) : (
+                <>
+                  <Ionicons name="swap-horizontal" size={moderateScale(18)} color={colors.secondaryContainer} />
+                  <Text style={styles.saveBtnText}>Hedef Masayı Seç</Text>
+                </>
+              )}
             </PressScale>
-          )}
-        </View>
-        <PressScale
-          style={[styles.saveBtn, (!hasPendingChanges || saving) && styles.saveBtnDisabled]}
-          onPress={handleSave}
-        >
-          {saving ? (
-            <ActivityIndicator color={colors.secondaryContainer} />
-          ) : (
-            <>
-              <Ionicons name="send" size={moderateScale(18)} color={colors.secondaryContainer} />
-              <Text style={styles.saveBtnText}>
-                {!hasPendingChanges
-                  ? 'Değişiklik Yok'
-                  : isNewOrder
-                    ? 'Siparişi Oluştur'
-                    : 'Siparişi Kaydet'}
-              </Text>
-            </>
-          )}
-        </PressScale>
+          </>
+        ) : (
+          <>
+            <View style={styles.bottomRow}>
+              <View>
+                <Text style={styles.bottomLabel}>TOPLAM TUTAR</Text>
+                <Text style={styles.bottomTotal}>₺{total.toFixed(2)}</Text>
+              </View>
+              {!isNewOrder && (
+                <PressScale style={styles.closeTablePill} onPress={() => setShowCloseModal(true)}>
+                  <Ionicons name="card-outline" size={moderateScale(14)} color={colors.secondaryContainer} />
+                  <Text style={styles.closeTablePillText}>Adisyonu Kapat</Text>
+                </PressScale>
+              )}
+            </View>
+
+            {!isNewOrder && existingItems.length > 0 && (
+              <View style={styles.transferRow}>
+                <PressScale
+                  style={[styles.transferBtn, (hasPendingChanges || transferring) && styles.transferBtnDisabled]}
+                  onPress={openTableTransferPicker}
+                >
+                  <Ionicons name="move-outline" size={moderateScale(16)} color={colors.primary} />
+                  <Text style={styles.transferBtnText}>Masayı Taşı</Text>
+                </PressScale>
+                <PressScale
+                  style={[styles.transferBtn, (hasPendingChanges || transferring) && styles.transferBtnDisabled]}
+                  onPress={enterTransferMode}
+                >
+                  <Ionicons name="swap-horizontal-outline" size={moderateScale(16)} color={colors.primary} />
+                  <Text style={styles.transferBtnText}>Ürün Taşı</Text>
+                </PressScale>
+              </View>
+            )}
+
+            <PressScale
+              style={[styles.saveBtn, (!hasPendingChanges || saving) && styles.saveBtnDisabled]}
+              onPress={handleSave}
+            >
+              {saving ? (
+                <ActivityIndicator color={colors.secondaryContainer} />
+              ) : (
+                <>
+                  <Ionicons name="send" size={moderateScale(18)} color={colors.secondaryContainer} />
+                  <Text style={styles.saveBtnText}>
+                    {!hasPendingChanges
+                      ? 'Değişiklik Yok'
+                      : isNewOrder
+                        ? 'Siparişi Oluştur'
+                        : 'Siparişi Kaydet'}
+                  </Text>
+                </>
+              )}
+            </PressScale>
+          </>
+        )}
       </View>
 
       {/* ── Variant Picker ──────────────────────────────────── */}
@@ -423,13 +560,54 @@ export function OrderPanel({
         getOrderPayments={getOrderPayments}
         addPayments={addPayments}
       />
+
+      <TablePickerModal
+        visible={pickerVisible}
+        onClose={() => setPickerVisible(false)}
+        tables={tables}
+        mode={pickerMode}
+        excludeTableId={table?.id}
+        title={pickerMode === 'emptyOnly' ? 'Masayı Taşı' : 'Hedef Masa'}
+        subtitle={
+          pickerMode === 'emptyOnly'
+            ? 'BOŞ MASA SEÇİN'
+            : `${selectedItemIds.size} ÜRÜN — DOLU MASA SEÇİN`
+        }
+        onSelect={handlePickerSelect}
+      />
     </SafeAreaView>
   );
 }
 
 // ── Subcomponents ─────────────────────────────────────────────
 
-function OrderItemRow({ name, note, quantity, isNew, onMinus, onPlus, onDelete }) {
+function OrderItemRow({ name, note, quantity, isNew, onMinus, onPlus, onDelete, selectionMode, selected, onToggleSelect }) {
+  if (selectionMode) {
+    return (
+      <TouchableOpacity
+        style={[styles.itemRow, selected && styles.itemRowSelected]}
+        onPress={onToggleSelect}
+        activeOpacity={0.7}
+      >
+        <Ionicons
+          name={selected ? 'checkbox' : 'square-outline'}
+          size={moderateScale(22)}
+          color={selected ? colors.secondary : colors.outline}
+        />
+        <View style={{ flex: 1, paddingLeft: scale(10), paddingRight: scale(8) }}>
+          <Text style={styles.itemName} numberOfLines={1}>{name}</Text>
+          {note ? (
+            <Text style={[styles.itemNote, isNew && styles.itemNoteNew]}>{note}</Text>
+          ) : (
+            <Text style={styles.itemNote}>Standart</Text>
+          )}
+        </View>
+        <View style={styles.qtyPill}>
+          <Text style={styles.qtyValue}>×{quantity}</Text>
+        </View>
+      </TouchableOpacity>
+    );
+  }
   return (
     <View style={styles.itemRow}>
       <View style={{ flex: 1, paddingRight: scale(8) }}>
@@ -784,6 +962,45 @@ const styles = StyleSheet.create({
     paddingHorizontal: scale(14),
     paddingVertical: verticalScale(8),
     borderRadius: moderateScale(999),
+  },
+  transferRow: {
+    flexDirection: 'row',
+    gap: scale(10),
+  },
+  transferBtn: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: scale(6),
+    paddingVertical: verticalScale(10),
+    borderRadius: moderateScale(12),
+    borderWidth: 1,
+    borderColor: colors.primaryContainer,
+    backgroundColor: colors.surfaceContainerLow,
+  },
+  transferBtnDisabled: {
+    opacity: 0.5,
+  },
+  transferBtnText: {
+    fontSize: moderateScale(13),
+    fontWeight: '700',
+    color: colors.primary,
+    letterSpacing: 0.2,
+  },
+  transferCancelPill: {
+    backgroundColor: colors.surfaceContainerHigh,
+    paddingHorizontal: scale(14),
+    paddingVertical: verticalScale(8),
+    borderRadius: moderateScale(999),
+  },
+  transferCancelText: {
+    color: colors.primary,
+    fontSize: moderateScale(12),
+    fontWeight: '800',
+  },
+  itemRowSelected: {
+    backgroundColor: colors.secondaryContainer,
   },
   closeTablePillText: {
     color: colors.secondaryContainer,

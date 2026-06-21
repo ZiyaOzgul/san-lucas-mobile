@@ -16,7 +16,7 @@ export default function TablesScreen() {
   const { tables, loading, error, refetch, getActiveOrderForTable, updateTableStatus } = useTables();
   const {
     closeOrder, createOrder, addItemsToOrder, updateOrderItemQty, deleteOrderItem, updateOrderTotal,
-    getOrderPayments, addPayments,
+    getOrderPayments, addPayments, transferOrder, transferItemsToOrder,
   } = useOrders();
   const { user } = useAuth();
   const [selectedTable, setSelectedTable] = useState(null);
@@ -162,6 +162,7 @@ export default function TablesScreen() {
         {selectedTable && (
           <OrderPanel
             table={selectedTable}
+            tables={tables}
             onClose={handlePanelClose}
             getActiveOrder={getActiveOrderForTable}
             closeOrder={closeOrder}
@@ -173,6 +174,8 @@ export default function TablesScreen() {
             updateOrderTotal={updateOrderTotal}
             getOrderPayments={getOrderPayments}
             addPayments={addPayments}
+            transferOrder={transferOrder}
+            transferItemsToOrder={transferItemsToOrder}
           />
         )}
       </Modal>

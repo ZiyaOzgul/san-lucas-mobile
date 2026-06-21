@@ -26,6 +26,7 @@ const MODES = [
   { key: "single", label: "Tek", icon: "card-outline" },
   { key: "split", label: "Eşit Böl", icon: "people-outline" },
   { key: "custom", label: "Tutar Gir", icon: "create-outline" },
+  { key: "item", label: "Ürün Ürün", icon: "basket-outline" },
 ];
 
 function PressScale({ style, onPress, children, scaleTo = 0.97, disabled }) {
@@ -79,6 +80,10 @@ export function CloseTableModal({
   const [draftMethod, setDraftMethod] = useState("cash");
   const [draftLabel, setDraftLabel] = useState("");
 
+  // item-by-item: { [itemId]: quantity_to_pay }
+  const [itemSelections, setItemSelections] = useState({});
+  const [itemMethod, setItemMethod] = useState("cash");
+
   const [submitting, setSubmitting] = useState(false);
 
   const items = order?.order_items || [];
@@ -96,6 +101,8 @@ export function CloseTableModal({
     setDraftAmount("");
     setDraftMethod("cash");
     setDraftLabel("");
+    setItemSelections({});
+    setItemMethod("cash");
     loadPayments();
   }, [visible, order?.id]);
 
@@ -162,8 +169,24 @@ export function CloseTableModal({
         payer_label: d.label || null,
       }));
     }
+    if (mode === "item") {
+      const parts = [];
+      let sum = 0;
+      for (const item of items) {
+        const qty = Number(itemSelections[item.id] || 0);
+        if (qty <= 0) continue;
+        sum += qty * Number(item.unit_price);
+        parts.push(`${qty}x ${item.products?.name || "Ürün"}`);
+      }
+      if (sum <= 0) return [];
+      return [{
+        amount: Math.round(sum * 100) / 100,
+        payment_method: itemMethod,
+        payer_label: parts.join(", ").slice(0, 200) || null,
+      }];
+    }
     return [];
-  }, [mode, remaining, singleMethod, splitCount, splitMethod, customDrafts]);
+  }, [mode, remaining, singleMethod, splitCount, splitMethod, customDrafts, items, itemSelections, itemMethod]);
 
   const commitAmount = paymentsToCommit.reduce((s, r) => s + r.amount, 0);
   const commitOverflow = commitAmount > remaining + 0.001;
@@ -565,6 +588,106 @@ export function CloseTableModal({
                   </PressScale>
                 </View>
               )}
+
+              {mode === "item" && (
+                <View style={styles.panel}>
+                  <Text style={styles.panelTitle}>Ürün Ürün Öde</Text>
+                  <Text style={styles.panelSub}>
+                    Ödenecek ürünleri ve adetlerini seçin. Toplam yalnızca seçim
+                    tutarı kadar tahsil edilir.
+                  </Text>
+
+                  <View style={styles.itemPickList}>
+                    {items.map((it, idx) => {
+                      const sel = Number(itemSelections[it.id] || 0);
+                      const max = Number(it.quantity);
+                      const lineTotal = sel * Number(it.unit_price);
+                      return (
+                        <View
+                          key={it.id ?? idx}
+                          style={[
+                            styles.itemPickRow,
+                            idx === items.length - 1 && { borderBottomWidth: 0 },
+                          ]}
+                        >
+                          <Pressable
+                            onPress={() =>
+                              setItemSelections(prev => ({
+                                ...prev,
+                                [it.id]: sel > 0 ? 0 : max,
+                              }))
+                            }
+                            hitSlop={6}
+                          >
+                            <Ionicons
+                              name={sel > 0 ? "checkbox" : "square-outline"}
+                              size={moderateScale(22)}
+                              color={sel > 0 ? colors.secondary : colors.outline}
+                            />
+                          </Pressable>
+                          <View style={{ flex: 1 }}>
+                            <Text style={styles.itemPickName} numberOfLines={1}>
+                              {it.products?.name || "Ürün"}
+                            </Text>
+                            <Text style={styles.itemPickPrice}>
+                              {fmtMoney(it.unit_price)} · {max} adet
+                            </Text>
+                          </View>
+                          <View style={styles.itemPickStepper}>
+                            <Pressable
+                              onPress={() =>
+                                setItemSelections(prev => ({
+                                  ...prev,
+                                  [it.id]: Math.max(0, sel - 1),
+                                }))
+                              }
+                              style={styles.itemPickBtn}
+                            >
+                              <Ionicons
+                                name="remove"
+                                size={moderateScale(16)}
+                                color={colors.primary}
+                              />
+                            </Pressable>
+                            <Text style={styles.itemPickQty}>{sel}</Text>
+                            <Pressable
+                              onPress={() =>
+                                setItemSelections(prev => ({
+                                  ...prev,
+                                  [it.id]: Math.min(max, sel + 1),
+                                }))
+                              }
+                              style={styles.itemPickBtn}
+                            >
+                              <Ionicons
+                                name="add"
+                                size={moderateScale(16)}
+                                color={colors.primary}
+                              />
+                            </Pressable>
+                          </View>
+                          <Text style={styles.itemPickLineTotal}>
+                            {fmtMoney(lineTotal)}
+                          </Text>
+                        </View>
+                      );
+                    })}
+                  </View>
+
+                  <View style={styles.methodRow}>
+                    <MethodButton
+                      method="cash"
+                      active={itemMethod === "cash"}
+                      onPress={() => setItemMethod("cash")}
+                    />
+                    <MethodButton
+                      method="card"
+                      active={itemMethod === "card"}
+                      onPress={() => setItemMethod("card")}
+                    />
+                  </View>
+                </View>
+              )}
             </>
           )}
 
@@ -857,12 +980,13 @@ const styles = StyleSheet.create({
   modeRow: { flexDirection: "row", gap: scale(4) },
   modeChip: {
     flex: 1,
-    minHeight: verticalScale(78),
+    minHeight: verticalScale(40),
+    minWidth: verticalScale(60),
     alignItems: "center",
     justifyContent: "center",
     gap: verticalScale(8),
-    paddingVertical: verticalScale(16),
-    paddingHorizontal: scale(4),
+    paddingVertical: verticalScale(8),
+    paddingHorizontal: scale(8),
     backgroundColor: colors.surfaceContainerLow,
     borderRadius: moderateScale(16),
   },
@@ -905,15 +1029,16 @@ const styles = StyleSheet.create({
     marginTop: verticalScale(-10),
   },
 
-  methodRow: { flexDirection: "row", gap: scale(4) },
+  methodRow: { flexDirection: "row", gap: scale(10) },
   methodBtn: {
     flex: 1,
     minHeight: verticalScale(96),
+    minWidth: verticalScale(110),
     alignItems: "center",
     justifyContent: "center",
     gap: verticalScale(10),
     paddingVertical: verticalScale(18),
-    paddingHorizontal: scale(8),
+    paddingHorizontal: scale(20),
     backgroundColor: colors.surfaceContainerHighest,
     borderRadius: moderateScale(16),
   },
@@ -1075,6 +1200,60 @@ const styles = StyleSheet.create({
     fontWeight: "800",
     color: colors.primary,
     letterSpacing: 0.3,
+  },
+
+  // Item-by-item payment
+  itemPickList: {
+    backgroundColor: colors.surface,
+    borderRadius: moderateScale(12),
+    paddingHorizontal: scale(10),
+  },
+  itemPickRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: scale(10),
+    paddingVertical: verticalScale(10),
+    borderBottomWidth: 1,
+    borderBottomColor: colors.outlineVariant,
+  },
+  itemPickName: {
+    fontSize: moderateScale(13),
+    fontWeight: "700",
+    color: colors.onSurface,
+  },
+  itemPickPrice: {
+    fontSize: moderateScale(11),
+    color: colors.onSurfaceVariant,
+    marginTop: verticalScale(2),
+  },
+  itemPickStepper: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: colors.surfaceContainerHighest,
+    borderRadius: moderateScale(999),
+    paddingHorizontal: scale(2),
+    paddingVertical: verticalScale(2),
+    gap: scale(2),
+  },
+  itemPickBtn: {
+    width: moderateScale(26),
+    height: moderateScale(26),
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  itemPickQty: {
+    minWidth: scale(20),
+    textAlign: "center",
+    fontSize: moderateScale(13),
+    fontWeight: "800",
+    color: colors.primary,
+  },
+  itemPickLineTotal: {
+    minWidth: scale(56),
+    textAlign: "right",
+    fontSize: moderateScale(12),
+    fontWeight: "800",
+    color: colors.secondary,
   },
 
   // History (existing payments)

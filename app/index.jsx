@@ -3,7 +3,6 @@ import { useRouter } from "expo-router";
 import { useEffect } from "react";
 import {
   ActivityIndicator,
-  Alert,
   Pressable,
   StatusBar,
   StyleSheet,
@@ -48,15 +47,18 @@ function PressableCard({ style, onPress, children }) {
 }
 
 export default function Index() {
-  const { user, loading } = useAuth();
+  const { user, profile, loading } = useAuth();
   const router = useRouter();
 
-  // Already-logged-in staff skip straight to the panel.
+  // Route signed-in users by role.
   useEffect(() => {
-    if (!loading && user) {
+    if (loading || !user) return;
+    if (profile?.role === "customer") {
+      router.replace("/customer/(tabs)");
+    } else {
       router.replace("/(tabs)/tables");
     }
-  }, [user, loading]);
+  }, [user, profile, loading]);
 
   if (loading || user) {
     return (
@@ -95,9 +97,7 @@ export default function Index() {
             {/* Customer Entry — primary glass card */}
             <PressableCard
               style={styles.customerCard}
-              onPress={() =>
-                Alert.alert("Yakında", "Müşteri girişi yakında aktif olacak.")
-              }
+              onPress={() => router.push("/customer/login")}
             >
               <View style={styles.cardHeaderRow}>
                 <View style={styles.customerIconWrap}>
